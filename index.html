@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>쇼나 아카이브 — 결혼전야</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f7f7f8;color:#222}
+main{max-width:1100px;margin:40px auto;padding:0 20px}
+.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:24px;box-shadow:0 2px 10px #0000000d}
+h1{font-size:22px;margin:0 0 8px}
+p{color:#666}
+button{border:0;border-radius:9px;padding:10px 15px;margin-right:8px;cursor:pointer}
+#status{margin:16px 0;color:#666}
+pre{white-space:pre-wrap;overflow:auto;max-height:70vh;background:#111;color:#eee;padding:18px;border-radius:10px;font-size:12px;line-height:1.45}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>［쇼나］ 결혼전야 ［すべて］</h1>
+<p>151MB 원본 JSON을 여러 조각으로 나누어 GitHub Pages에서 다시 하나의 JSON처럼 표시합니다.</p>
+<div id="status">파일을 불러오는 중…</div>
+<button id="download" class="hidden">원본 JSON 다운로드</button>
+<button id="copy" class="hidden">JSON 복사</button>
+<pre id="output" class="hidden"></pre>
+</div>
+</main>
+<script>
+const statusEl=document.getElementById('status');
+const out=document.getElementById('output');
+const downloadBtn=document.getElementById('download');
+const copyBtn=document.getElementById('copy');
+let jsonText='';
+
+async function getJson(path){
+  const r=await fetch(path);
+  if(!r.ok) throw new Error(path+' ('+r.status+')');
+  return r.json();
+}
+async function load(){
+  try{
+    const m=await getJson('manifest.json');
+    const [imgs,dices]=await Promise.all([
+      Promise.all(m.imageChunks.map(getJson)),
+      Promise.all(m.diceEffectChunks.map(getJson))
+    ]);
+    const result={...m.metadata, images:Object.assign({},...imgs), diceEffects:Object.assign({},...dices)};
+    // Keep the original top-level order as closely as possible.
+    const ordered={};
+    const originalOrder=["format","version","title","source","images","characterSettings","diceEffects","channels","lines","backgroundLibrary","backgroundBlur","colorHistory","exportedAt","characters"];
+    for(const k of originalOrder) if(k in result) ordered[k]=result[k];
+    for(const k of Object.keys(result)) if(!(k in ordered)) ordered[k]=result[k];
+    jsonText=JSON.stringify(ordered,null,2);
+    statusEl.textContent='불러오기 완료 · 원본 약 '+m.originalSizeMB+'MB · 이미지 '+Object.keys(ordered.images||{}).length+'개';
+    out.textContent=jsonText;
+    out.classList.remove('hidden');
+    downloadBtn.classList.remove('hidden');
+    copyBtn.classList.remove('hidden');
+  }catch(e){
+    statusEl.textContent='불러오기에 실패했습니다: '+e.message;
+  }
+}
+downloadBtn.onclick=()=>{
+  const blob=new Blob([jsonText],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='[쇼나] 결혼전야 [すべて].cinema.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+copyBtn.onclick=async()=>{
+  try{await navigator.clipboard.writeText(jsonText); copyBtn.textContent='복사 완료';}
+  catch(e){alert('브라우저 보안상 복사가 제한되었습니다.')}
+};
+load();
+</script>
+</body>
+</html>
