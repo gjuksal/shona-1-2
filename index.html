@@ -3,77 +3,136 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>쇼나 아카이브 — 결혼전야</title>
+<title>［쇼나］ 결혼전야 ［すべて］</title>
 <style>
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f7f7f8;color:#222}
-main{max-width:1100px;margin:40px auto;padding:0 20px}
-.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:24px;box-shadow:0 2px 10px #0000000d}
-h1{font-size:22px;margin:0 0 8px}
-p{color:#666}
-button{border:0;border-radius:9px;padding:10px 15px;margin-right:8px;cursor:pointer}
-#status{margin:16px 0;color:#666}
-pre{white-space:pre-wrap;overflow:auto;max-height:70vh;background:#111;color:#eee;padding:18px;border-radius:10px;font-size:12px;line-height:1.45}
-.hidden{display:none}
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#222;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:30px auto;padding:0 16px}
+.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:22px}
+h1{font-size:22px;margin:0 0 6px}
+#status{color:#666;margin:10px 0 16px}
+#log{display:flex;flex-direction:column;gap:10px}
+.msg{display:flex;gap:10px;align-items:flex-start}
+.avatar{width:52px;height:52px;object-fit:cover;border-radius:8px;background:#eee;flex:none}
+.bubble{background:#f1f1f3;border-radius:12px;padding:9px 12px;max-width:85%;white-space:pre-wrap;word-break:break-word}
+.name{font-weight:700;font-size:13px;margin-bottom:3px}
+.time{font-size:10px;color:#999;margin-top:4px}
+.system{color:#888;font-size:12px;padding:8px 0}
+#more{margin-top:16px;padding:10px 16px;border:0;border-radius:9px;cursor:pointer}
 </style>
 </head>
 <body>
-<main>
-<div class="card">
+<main><div class="card">
 <h1>［쇼나］ 결혼전야 ［すべて］</h1>
-<p>151MB 원본 JSON을 여러 조각으로 나누어 GitHub Pages에서 다시 하나의 JSON처럼 표시합니다.</p>
 <div id="status">파일을 불러오는 중…</div>
-<button id="download" class="hidden">원본 JSON 다운로드</button>
-<button id="copy" class="hidden">JSON 복사</button>
-<pre id="output" class="hidden"></pre>
-</div>
-</main>
+<div id="log"></div>
+<button id="more" style="display:none">더 보기</button>
+</div></main>
 <script>
-const statusEl=document.getElementById('status');
-const out=document.getElementById('output');
-const downloadBtn=document.getElementById('download');
-const copyBtn=document.getElementById('copy');
-let jsonText='';
+const $=id=>document.getElementById(id);
+const statusEl=$('status'), log=$('log'), more=$('more');
+let lines=[], images={}, shown=0;
+const PAGE=100;
 
-async function getJson(path){
-  const r=await fetch(path);
+async function getJSON(path){
+  const r=await fetch(path,{cache:'no-cache'});
   if(!r.ok) throw new Error(path+' ('+r.status+')');
   return r.json();
 }
+
+function imageSrc(v){
+  if(!v) return '';
+  if(typeof v==='string') return v.startsWith('data:')?v:'';
+  if(typeof v==='object'){
+    if(typeof v.src==='string') return v.src;
+    if(typeof v.url==='string') return v.url;
+    if(typeof v.data==='string'){
+      if(v.data.startsWith('data:')) return v.data;
+      const mime=v.mimeType||v.type||'image/jpeg';
+      return 'data:'+mime+';base64,'+v.data;
+    }
+    if(typeof v.base64==='string'){
+      const mime=v.mimeType||v.type||'image/jpeg';
+      return 'data:'+mime+';base64,'+v.base64;
+    }
+  }
+  return '';
+}
+
+function draw(){
+  const end=Math.min(shown+PAGE,lines.length);
+  for(let i=shown;i<end;i++){
+    const x=lines[i];
+    if(x.hidden) continue;
+    if(x.channel==='other') continue;
+
+    if(x.kind!=='dialogue'){
+      const s=document.createElement('div');
+      s.className='system';
+      s.textContent=x.text||'';
+      log.appendChild(s);
+      continue;
+    }
+
+    const row=document.createElement('div');
+    row.className='msg';
+
+    const src=imageSrc(images[x.imageId]);
+    if(src){
+      const img=document.createElement('img');
+      img.className='avatar';
+      img.loading='lazy';
+      img.src=src;
+      row.appendChild(img);
+    }
+
+    const b=document.createElement('div');
+    b.className='bubble';
+
+    const n=document.createElement('div');
+    n.className='name';
+    n.textContent=x.speaker?.name||'';
+    if(x.speaker?.color) n.style.color=x.speaker.color;
+
+    const t=document.createElement('div');
+    t.textContent=x.text||'';
+
+    b.appendChild(n);
+    b.appendChild(t);
+
+    if(x.timestamp){
+      const tm=document.createElement('div');
+      tm.className='time';
+      tm.textContent=new Date(x.timestamp).toLocaleString('ko-KR');
+      b.appendChild(tm);
+    }
+    row.appendChild(b);
+    log.appendChild(row);
+  }
+  shown=end;
+  more.style.display=shown<lines.length?'block':'none';
+}
+
 async function load(){
   try{
-    const m=await getJson('manifest.json');
-    const [imgs,dices]=await Promise.all([
-      Promise.all(m.imageChunks.map(getJson)),
-      Promise.all(m.diceEffectChunks.map(getJson))
-    ]);
-    const result={...m.metadata, images:Object.assign({},...imgs), diceEffects:Object.assign({},...dices)};
-    // Keep the original top-level order as closely as possible.
-    const ordered={};
-    const originalOrder=["format","version","title","source","images","characterSettings","diceEffects","channels","lines","backgroundLibrary","backgroundBlur","colorHistory","exportedAt","characters"];
-    for(const k of originalOrder) if(k in result) ordered[k]=result[k];
-    for(const k of Object.keys(result)) if(!(k in ordered)) ordered[k]=result[k];
-    jsonText=JSON.stringify(ordered,null,2);
-    statusEl.textContent='불러오기 완료 · 원본 약 '+m.originalSizeMB+'MB · 이미지 '+Object.keys(ordered.images||{}).length+'개';
-    out.textContent=jsonText;
-    out.classList.remove('hidden');
-    downloadBtn.classList.remove('hidden');
-    copyBtn.classList.remove('hidden');
+    const m=await getJSON('manifest.json');
+
+    // 이미지가 실패해도 로그 자체는 계속 표시
+    const chunks=m.imageChunks||[];
+    const results=await Promise.allSettled(chunks.map(getJSON));
+    for(const r of results){
+      if(r.status==='fulfilled' && r.value && typeof r.value==='object')
+        images=Object.assign(images,r.value);
+    }
+
+    lines=m.metadata?.lines||[];
+    statusEl.textContent=`불러오기 완료 · ${lines.length.toLocaleString()}개 로그 · 이미지 ${Object.keys(images).length}개`;
+    draw();
   }catch(e){
     statusEl.textContent='불러오기에 실패했습니다: '+e.message;
   }
 }
-downloadBtn.onclick=()=>{
-  const blob=new Blob([jsonText],{type:'application/json;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='[쇼나] 결혼전야 [すべて].cinema.json';
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-};
-copyBtn.onclick=async()=>{
-  try{await navigator.clipboard.writeText(jsonText); copyBtn.textContent='복사 완료';}
-  catch(e){alert('브라우저 보안상 복사가 제한되었습니다.')}
-};
+more.onclick=draw;
 load();
 </script>
 </body>
